@@ -8,6 +8,9 @@
 
 Threadcrumb simplifies metadata logging by embedding information directly into threads, ensuring their visibility in backtraces during collection. It offers a straightforward approach to enhance traceability, enabling seamless logging of metadata within threads. With Threadcrumb, you can easily integrate metadata logging into your applications, improving their debugging and diagnostic capabilities.
 
+![Threadcrumb](https://github.com/naftaly/Threadcrumb/assets/221626/55ef71a8-b350-4df0-bf4c-29686ac70528)
+
+
 ## Installation
 
 Threadcrumb can be integrated into your project using Swift Package Manager (SPM) or by directly adding the source files to your Xcode project.
@@ -36,7 +39,7 @@ let threadcrumb = Threadcrumb(identifier: "com.crumb.appstate")
 ### Logging Static Information
 
 ```swift
-threadcrumb.log("App Started")
+threadcrumb.log("appstate_active")
 ```
 
 ### Logging a Formatted Strings
