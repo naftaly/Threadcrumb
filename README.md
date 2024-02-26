@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Swift](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org/)
-[![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20visionOS-lightgrey.svg)]()
 
 ## Overview
 
@@ -57,7 +57,7 @@ You might want to do this on the backend when collecting backtraces from MetricK
 ## Requirements
 
 - Swift 5.0+
-- iOS 16.0+ / macOS 10.15+ / tvOS 16.0+ / watchOS 6.0+
+- iOS 16.0+ / macOS 13.0+ / tvOS 16.0+ / watchOS 9.0+ / visionOS 1.0+
 
 ## License
 

@@ -6,7 +6,7 @@
 
 import Foundation
 
-@available(iOS 16.0, *)
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 final public class Threadcrumb {
     
     /// The identifier for the thread.
@@ -513,7 +513,7 @@ private let _lookupTable: [String: (inout [String])->()] = [
 // MARK: - For testing only
 // Anything below here should be used for testing purposes only
 
-@available(iOS 16.0, macOS 10.15, tvOS 16.0, watchOS 6.0, *)
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 extension Threadcrumb {
     func stringLoggingThread() -> String {
         
@@ -521,7 +521,7 @@ extension Threadcrumb {
         // thread a second to receive the signal and complete
         // the frame calls. We could/should use something to wait/signal
         // here instead but this is simply for testing and will do the trick.
-        Thread.sleep(forTimeInterval: 0.5)
+        Thread.sleep(forTimeInterval: 1)
         
         guard let symbols: [String] = self._thread?.tc_Stack else {
             return ""
