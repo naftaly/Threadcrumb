@@ -5,6 +5,7 @@
 //
 
 import Foundation
+import os
 
 @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 final public class Threadcrumb {
@@ -23,10 +24,19 @@ final public class Threadcrumb {
             guard let self = self else {
                 return
             }
-            while(Thread.current.isExecuting) {
+            let thread = Thread.current
+            while(thread.isExecuting && !thread.isCancelled) {
                 self._lock.lock()
                 var values: [String] = self._log
                 self._lock.unlock()
+                
+                // there are about 4 frames per characters (due to Swift !thunks!),
+                // then 10 more for the prefix/postfix.
+                let prevSize = thread.stackSize
+                let newSize = max( Int(PTHREAD_STACK_MIN), (values.count * 4) + 10 )
+                if newSize > prevSize {
+                    thread.stackSize = newSize
+                }
                 THREAD_CRUMB_BEGIN(&values)
             }
         }
@@ -75,7 +85,7 @@ final public class Threadcrumb {
     
     static private let _sAllowedCharacters: CharacterSet = CharacterSet(charactersIn: "0123456789abcdefghijklmnopqrstuvwxyz_")
     static private let _sDisallowedCharacters: CharacterSet = _sAllowedCharacters.inverted
-    private let _lock: NSLock = NSLock()
+    private let _lock: OSAllocatedUnfairLock = OSAllocatedUnfairLock()
     private var _log: [String] = []
     private var _thread: Thread?
 }
