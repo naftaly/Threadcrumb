@@ -1,8 +1,9 @@
 # Threadcrumb
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Swift](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org/)
+[![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)](https://swift.org/)
 [![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20visionOS-lightgrey.svg)]()
+[![Tests](https://github.com/naftaly/Threadcrumb/actions/workflows/test.yml/badge.svg)](https://github.com/naftaly/Threadcrumb/actions/workflows/test.yml)
 
 ## Overview
 
@@ -18,7 +19,7 @@ Threadcrumb can be integrated into your project using Swift Package Manager (SPM
 ### Swift Package Manager
 
 1. In Xcode, select **File** > **Swift Packages** > **Add Package Dependency...**
-2. Enter the repository URL `https://github.com/naftaly/threadcrumb.git`.
+2. Enter the repository URL `https://github.com/naftaly/Threadcrumb.git`.
 3. Specify the version or branch you want to use.
 4. Follow the prompts to complete the integration.
 
@@ -36,17 +37,10 @@ Threadcrumb can be integrated into your project using Swift Package Manager (SPM
 let threadcrumb = Threadcrumb(identifier: "com.crumb.appstate")
 ```
 
-### Logging Static Information
+### Logging
 
 ```swift
 threadcrumb.log("appstate_active")
-```
-
-### Logging a Formatted Strings
-
-```swift
-let appstate = "active"
-threadcrumb.log("appstate_%@", appstate)
 ```
 
 ### Extracting Logs
@@ -56,7 +50,7 @@ You might want to do this on the backend when collecting backtraces from MetricK
 
 ## Requirements
 
-- Swift 5.0+
+- Swift 6.2+
 - iOS 16.0+ / macOS 13.0+ / tvOS 16.0+ / watchOS 9.0+ / visionOS 1.0+
 
 ## License

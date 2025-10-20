@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+  
+jobs:
+  test:
+    name: Run Tests
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      timeout-minutes: 2
+
+    - name: Run Unit Tests
+      uses: mxcl/xcodebuild@v3
+      timeout-minutes: 5
+      with:
+        swift: 6.2
+        action: test
+        platform: macOS
+        arch: arm64
+        sanitizer: address
