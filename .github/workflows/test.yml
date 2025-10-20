@@ -24,6 +24,7 @@ jobs:
       uses: mxcl/xcodebuild@v3
       timeout-minutes: 80
       with:
+        swift: 6.2
         action: test
         platform: iOS
         trust-plugins: false
