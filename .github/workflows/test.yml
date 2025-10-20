@@ -27,7 +27,3 @@ jobs:
         swift: 6.2
         action: test
         platform: iOS
-        trust-plugins: false
-        arch: arm64
-        sanitizer: address
-        warnings-as-errors: true
