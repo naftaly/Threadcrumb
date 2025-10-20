@@ -17,19 +17,16 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
+      timeout-minutes: 2
 
-    - name: Setup Swift
-      uses: swift-actions/setup-swift@v2
+    - name: Run Unit Tests
+      uses: mxcl/xcodebuild@v3
+      timeout-minutes: 80
       with:
-        swift-version: '6.1'
-
-    - name: Test
-      run: swift test
-
-    - name: Test w/tsan
-      run: swift test --sanitize thread
-
-    - name: Test w/asan
-      run: swift test --sanitize address
+        action: test
+        platform: iOS
+        trust-plugins: false
+        arch: arm64
+        sanitizer: address
+        warnings-as-errors: true
