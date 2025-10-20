@@ -26,4 +26,5 @@ jobs:
       with:
         swift: 6.2
         action: test
-        platform: iOS
+        platform: macOS
+        arch: arm64
