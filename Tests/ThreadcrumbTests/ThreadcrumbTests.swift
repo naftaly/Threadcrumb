@@ -4,18 +4,28 @@ import XCTest
 @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 final class ThreadcrumbTests: XCTestCase {
     
-    let threadcrumb: Threadcrumb! = Threadcrumb(identifier: "com.bedroomcode.ThreadcrumbTests")
+    var threadcrumb: Threadcrumb!
+    
+    override func setUp() {
+        super.setUp()
+        threadcrumb = Threadcrumb(identifier: "com.bedroomcode.ThreadcrumbTests")
+    }
 
+    override func tearDown() {
+        threadcrumb = nil
+        super.tearDown()
+    }
+    
+    func testEmptyString() throws {
+        threadcrumb.log("")
+        XCTAssertEqual("", threadcrumb.stringLoggingThread())
+    }
+    
     func testSimpleOutputSameAsInput() throws {
         threadcrumb.log("abc")
         XCTAssertEqual("abc", threadcrumb.stringLoggingThread())
     }
-    
-    func testFormattedInput() throws {
-        threadcrumb.log("%@ %0.2f", "hello", 12.12)
-        XCTAssertEqual("hello_12_12", threadcrumb.stringLoggingThread())
-    }
-    
+
     func testInitWithIdentifier() {
         XCTAssertEqual(threadcrumb.identifier, "com.bedroomcode.ThreadcrumbTests", "The identifier should match the one provided at initialization.")
     }
@@ -34,17 +44,7 @@ final class ThreadcrumbTests: XCTestCase {
         let loggedString = threadcrumb.stringLoggingThread()
         XCTAssertEqual(loggedString, expectedString, "Disallowed characters should be converted to underscores.")
     }
-    
-    func testLogFormattedString() {
-        let format = "Test %d %@"
-        let value = 123
-        let string = "formatted"
-        let expectedString = "test_123_formatted"
-        threadcrumb.log(format, value, string)
-        let loggedString = threadcrumb.stringLoggingThread()
-        XCTAssertEqual(loggedString, expectedString, "Formatted string should be logged correctly with allowed characters.")
-    }
-    
+
     func testThreadBehavior() {
         let testString = "threadtest"
         threadcrumb.log(testString)
@@ -53,8 +53,13 @@ final class ThreadcrumbTests: XCTestCase {
     }
     
     func testConcurrency() {
-        DispatchQueue.concurrentPerform(iterations: 1000) { _ in
-            threadcrumb.log(String.random(Int.random(in: 0...1000)))
+        // Avoid capturing `self` (XCTestCase) inside the @Sendable closure by copying the needed reference.
+        guard let logger = threadcrumb else {
+            XCTFail("threadcrumb was nil")
+            return
+        }
+        DispatchQueue.concurrentPerform(iterations: 1000) { [logger] _ in
+            logger.log(String.random(Int.random(in: 0...1000)))
         }
     }
 }

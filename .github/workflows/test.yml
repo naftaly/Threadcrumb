@@ -1,0 +1,35 @@
+name: Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+  
+jobs:
+  test:
+    name: Run Tests
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Swift
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: '6.2'
+
+    - name: Test
+      run: swift test
+
+    - name: Test w/tsan
+      run: swift test --sanitize thread
+
+    - name: Test w/asan
+      run: swift test --sanitize address
