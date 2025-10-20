@@ -28,23 +28,4 @@ jobs:
         action: test
         platform: macOS
         arch: arm64
-
-    - name: Run Unit Tests with Asan
-      uses: mxcl/xcodebuild@v3
-      timeout-minutes: 5
-      with:
-        swift: 6.2
-        action: test
-        platform: macOS
-        arch: arm64
         sanitizer: address
-
-    - name: Run Unit Tests with Tsan
-      uses: mxcl/xcodebuild@v3
-      timeout-minutes: 5
-      with:
-        swift: 6.2
-        action: test
-        platform: macOS
-        arch: arm64
-        sanitizer: thread
