@@ -20,28 +20,22 @@ final public class Threadcrumb {
     public init(identifier: String) {
         self.identifier = identifier
         
+        let logSem = self._logSemaphore
         self._thread = Thread { [weak self] in
-            guard let self = self else {
-                return
-            }
             let thread = Thread.current
-            while(thread.isExecuting && !thread.isCancelled) {
-                self._lock.lock()
-                var values: [String] = self._log
-                self._lock.unlock()
-                
-                // there are about 4 frames per characters (due to Swift !thunks!),
-                // then 10 more for the prefix/postfix.
-                let prevSize = thread.stackSize
-                let newSize = max( Int(PTHREAD_STACK_MIN), (values.count * 4) + 10 )
-                if newSize > prevSize {
-                    thread.stackSize = newSize
+            
+            // first time around just wait until we're signaled
+            logSem.wait()
+            
+            while (true) {
+                guard let self, thread.isExecuting, !thread.isCancelled else {
+                    break
                 }
-                THREAD_CRUMB_BEGIN(&values)
+                var values: [String] = self._log
+                THREAD_CRUMB_BEGIN(self, &values)
             }
         }
         self._thread?.name = self.identifier
-        self._thread?.tc_Semaphore = DispatchSemaphore(value: 0)
         self._thread?.start()
     }
 
@@ -62,14 +56,20 @@ final public class Threadcrumb {
 
         // set the value
         _lock.lock()
+        
+        _stack = nil
         _log = validatedCharacters
-        _lock.unlock()
         
         // signal the thread.
         // by doing so, the thread will begin iterating over `_log`
         // then wait again. this leaves the thread with a
         // stack that describes `_log`.
-        self._thread?.tc_Semaphore?.signal()
+        _logSemaphore.signal()
+        
+        // wait for the stack write to complete
+        _completedSemaphore.wait()
+        
+        _lock.unlock()
     }
     
     /// Logs a formatted string to the thread named `.identifier`.
@@ -85,9 +85,12 @@ final public class Threadcrumb {
     
     static private let _sAllowedCharacters: CharacterSet = CharacterSet(charactersIn: "0123456789abcdefghijklmnopqrstuvwxyz_")
     static private let _sDisallowedCharacters: CharacterSet = _sAllowedCharacters.inverted
-    private let _lock: OSAllocatedUnfairLock = OSAllocatedUnfairLock()
-    private var _log: [String] = []
-    private var _thread: Thread?
+    fileprivate let _lock: OSAllocatedUnfairLock = OSAllocatedUnfairLock()
+    fileprivate var _log: [String] = []
+    fileprivate var _thread: Thread?
+    fileprivate let _logSemaphore = DispatchSemaphore(value: 0)
+    fileprivate let _completedSemaphore = DispatchSemaphore(value: 0)
+    fileprivate var _stack: [String]? = nil
 }
 
 // MARK: - Utilities
@@ -101,386 +104,402 @@ private extension Array {
     }
 }
 
-private let ThreadcrumbDictionarySemaphoreKey = "threadcrumb.semaphore.key"
-private let ThreadcrumbDictionaryStackKey = "threadcrumb.stack.key"
-
-private extension Thread {
-    var tc_Semaphore: DispatchSemaphore? {
-        get {
-            return threadDictionary[ThreadcrumbDictionarySemaphoreKey] as? DispatchSemaphore
-        }
-        set {
-            threadDictionary[ThreadcrumbDictionarySemaphoreKey] = newValue
-        }
-    }
-    
-    var tc_Stack: [String]? {
-        get {
-            return threadDictionary[ThreadcrumbDictionaryStackKey] as? [String]
-        }
-        set {
-            threadDictionary[ThreadcrumbDictionaryStackKey] = newValue
-        }
-    }
-}
-
 // MARK: - Log start and end
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB_BEGIN") @inline(never) @_optimize(none)
-private func THREAD_CRUMB_BEGIN(_ values: inout [String]) {
+private func THREAD_CRUMB_BEGIN(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB_END") @inline(never) @_optimize(none)
-private func THREAD_CRUMB_END() {
-    Thread.current.tc_Stack = Thread.callStackSymbols
-    Thread.current.tc_Semaphore?.wait()
-    Thread.current.tc_Stack = nil
+private func THREAD_CRUMB_END(_ tc: Threadcrumb) {
+    tc._stack = Thread.callStackSymbols
+    tc._completedSemaphore.signal()
+    tc._logSemaphore.wait()
 }
 
 // MARK: - Character implementations
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__0") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__0(_ values: inout [String]) {
+private func THREAD_CRUMB__0(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__1") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__1(_ values: inout [String]) {
+private func THREAD_CRUMB__1(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__2") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__2(_ values: inout [String]) {
+private func THREAD_CRUMB__2(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__3") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__3(_ values: inout [String]) {
+private func THREAD_CRUMB__3(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__4") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__4(_ values: inout [String]) {
+private func THREAD_CRUMB__4(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__5") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__5(_ values: inout [String]) {
+private func THREAD_CRUMB__5(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__6") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__6(_ values: inout [String]) {
+private func THREAD_CRUMB__6(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__7") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__7(_ values: inout [String]) {
+private func THREAD_CRUMB__7(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__8") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__8(_ values: inout [String]) {
+private func THREAD_CRUMB__8(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__9") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__9(_ values: inout [String]) {
+private func THREAD_CRUMB__9(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__a") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__a(_ values: inout [String]) {
+private func THREAD_CRUMB__a(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__b") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__b(_ values: inout [String]) {
+private func THREAD_CRUMB__b(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__c") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__c(_ values: inout [String]) {
+private func THREAD_CRUMB__c(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__d") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__d(_ values: inout [String]) {
+private func THREAD_CRUMB__d(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__e") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__e(_ values: inout [String]) {
+private func THREAD_CRUMB__e(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__f") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__f(_ values: inout [String]) {
+private func THREAD_CRUMB__f(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__g") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__g(_ values: inout [String]) {
+private func THREAD_CRUMB__g(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__h") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__h(_ values: inout [String]) {
+private func THREAD_CRUMB__h(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__i") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__i(_ values: inout [String]) {
+private func THREAD_CRUMB__i(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__j") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__j(_ values: inout [String]) {
+private func THREAD_CRUMB__j(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__k") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__k(_ values: inout [String]) {
+private func THREAD_CRUMB__k(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__l") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__l(_ values: inout [String]) {
+private func THREAD_CRUMB__l(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__m") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__m(_ values: inout [String]) {
+private func THREAD_CRUMB__m(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__n") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__n(_ values: inout [String]) {
+private func THREAD_CRUMB__n(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__o") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__o(_ values: inout [String]) {
+private func THREAD_CRUMB__o(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__p") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__p(_ values: inout [String]) {
+private func THREAD_CRUMB__p(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__q") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__q(_ values: inout [String]) {
+private func THREAD_CRUMB__q(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__r") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__r(_ values: inout [String]) {
+private func THREAD_CRUMB__r(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__s") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__s(_ values: inout [String]) {
+private func THREAD_CRUMB__s(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__t") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__t(_ values: inout [String]) {
+private func THREAD_CRUMB__t(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__u") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__u(_ values: inout [String]) {
+private func THREAD_CRUMB__u(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__v") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__v(_ values: inout [String]) {
+private func THREAD_CRUMB__v(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__w") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__w(_ values: inout [String]) {
+private func THREAD_CRUMB__w(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__x") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__x(_ values: inout [String]) {
+private func THREAD_CRUMB__x(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__y") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__y(_ values: inout [String]) {
+private func THREAD_CRUMB__y(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB__z") @inline(never) @_optimize(none)
-private func THREAD_CRUMB__z(_ values: inout [String]) {
+private func THREAD_CRUMB__z(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
-
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 @_silgen_name("THREAD_CRUMB___") @inline(never) @_optimize(none)
-private func THREAD_CRUMB___(_ values: inout [String]) {
+private func THREAD_CRUMB___(_ tc: Threadcrumb, _ values: inout [String]) {
     guard let char = values.popFirst(), let fn = _lookupTable[char] else {
-        THREAD_CRUMB_END()
+        THREAD_CRUMB_END(tc)
         return
     }
-    fn(&values)
+    fn(tc, &values)
 }
 
 // MARK: - Lookup table
 
-private let _lookupTable: [String: (inout [String])->()] = [
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
+private let _lookupTable: [String: (Threadcrumb, inout [String])->()] = [
     "0": THREAD_CRUMB__0,
     "1": THREAD_CRUMB__1,
     "2": THREAD_CRUMB__2,
@@ -527,13 +546,9 @@ private let _lookupTable: [String: (inout [String])->()] = [
 extension Threadcrumb {
     func stringLoggingThread() -> String {
         
-        // in case we just called `.log`, we need to give the 
-        // thread a second to receive the signal and complete
-        // the frame calls. We could/should use something to wait/signal
-        // here instead but this is simply for testing and will do the trick.
-        Thread.sleep(forTimeInterval: 1)
+        let stack: [String]? = self._lock.withLock { self._stack?.map{ $0 } }
         
-        guard let symbols: [String] = self._thread?.tc_Stack else {
+        guard let symbols: [String] = stack else {
             return ""
         }
         

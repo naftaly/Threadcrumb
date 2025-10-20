@@ -4,26 +4,23 @@ import XCTest
 @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, visionOS 1.0, *)
 final class ThreadcrumbTests: XCTestCase {
     
-    let _logger: Threadcrumb = Threadcrumb(identifier: "com.bedroomcode.ThreadcrumbTests")
+    let threadcrumb: Threadcrumb! = Threadcrumb(identifier: "com.bedroomcode.ThreadcrumbTests")
 
     func testSimpleOutputSameAsInput() throws {
-        _logger.log("abc")
-        XCTAssertEqual("abc", _logger.stringLoggingThread())
+        threadcrumb.log("abc")
+        XCTAssertEqual("abc", threadcrumb.stringLoggingThread())
     }
     
     func testFormattedInput() throws {
-        _logger.log("%@ %0.2f", "hello", 12.12)
-        XCTAssertEqual("hello_12_12", _logger.stringLoggingThread())
+        threadcrumb.log("%@ %0.2f", "hello", 12.12)
+        XCTAssertEqual("hello_12_12", threadcrumb.stringLoggingThread())
     }
     
     func testInitWithIdentifier() {
-        let identifier = "TestThread"
-        let threadcrumb = Threadcrumb(identifier: identifier)
-        XCTAssertEqual(threadcrumb.identifier, identifier, "The identifier should match the one provided at initialization.")
+        XCTAssertEqual(threadcrumb.identifier, "com.bedroomcode.ThreadcrumbTests", "The identifier should match the one provided at initialization.")
     }
     
     func testLogWithAllowedCharacters() {
-        let threadcrumb = Threadcrumb(identifier: "TestThread")
         let testString = "abc123"
         threadcrumb.log(testString)
         let loggedString = threadcrumb.stringLoggingThread()
@@ -31,7 +28,6 @@ final class ThreadcrumbTests: XCTestCase {
     }
     
     func testLogWithDisallowedCharacters() {
-        let threadcrumb = Threadcrumb(identifier: "TestThread")
         let testString = "ABC@123!"
         let expectedString = "abc_123_"
         threadcrumb.log(testString)
@@ -40,7 +36,6 @@ final class ThreadcrumbTests: XCTestCase {
     }
     
     func testLogFormattedString() {
-        let threadcrumb = Threadcrumb(identifier: "TestThread")
         let format = "Test %d %@"
         let value = 123
         let string = "formatted"
@@ -51,10 +46,29 @@ final class ThreadcrumbTests: XCTestCase {
     }
     
     func testThreadBehavior() {
-        let threadcrumb = Threadcrumb(identifier: "TestThread")
         let testString = "threadtest"
         threadcrumb.log(testString)
         let loggedString = threadcrumb.stringLoggingThread()
         XCTAssertNotEqual(loggedString, "", "Thread should process the logged string and not be empty.")
     }
+    
+    func testConcurrency() {
+        DispatchQueue.concurrentPerform(iterations: 1000) { _ in
+            threadcrumb.log(String.random(Int.random(in: 0...1000)))
+        }
+    }
+}
+
+extension String {
+
+    static func random(_ length: Int) -> String {
+        let characters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return String((0..<length).compactMap { _ in characters.randomElement() })
+    }
+
+    static func randomDisallowed(_ length: Int) -> String {
+        let characters = "!@#$%^&*()"
+        return String((0..<length).compactMap { _ in characters.randomElement() })
+    }
+
 }
