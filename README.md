@@ -1,7 +1,7 @@
 # Threadcrumb
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)](https://swift.org/)
+[![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org/)
 [![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20visionOS-lightgrey.svg)]()
 [![Tests](https://github.com/naftaly/Threadcrumb/actions/workflows/test.yml/badge.svg)](https://github.com/naftaly/Threadcrumb/actions/workflows/test.yml)
 
@@ -62,7 +62,7 @@ let breadcrumb = threadcrumb.stringLoggingThread()
 
 ## Requirements
 
-- Swift 6.2+
+- Swift 6.0+
 - iOS 16.0+ / macOS 13.0+ / tvOS 16.0+ / watchOS 9.0+ / visionOS 1.0+
 
 ## License

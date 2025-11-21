@@ -20,4 +20,4 @@
 --disable blankLinesBetweenScopes
 
 # Swift version
---swiftversion 6.2
+--swiftversion 6.0
