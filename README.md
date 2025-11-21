@@ -45,8 +45,20 @@ threadcrumb.log("appstate_active")
 
 ### Extracting Logs
 
-See `Threadcrumb.stringLoggingThread` for an example how to extract your logs from a stacktrace.
-You might want to do this on the backend when collecting backtraces from MetricKit for example.
+Threadcrumb provides several methods to access the call stack information:
+
+```swift
+// Get the call stack return addresses as UInt64 values (most efficient)
+let addresses = threadcrumb.callStackReturnAddresses()
+
+// Get the call stack symbols as strings (computed on-demand from addresses)
+let symbols = threadcrumb.callStackSymbols()
+
+// Extract the encoded breadcrumb string from the stack (for testing)
+let breadcrumb = threadcrumb.stringLoggingThread()
+```
+
+**Performance note:** Only return addresses are stored in memory. Symbols are computed on-demand from addresses when you call `callStackSymbols()`, which uses `dladdr` for symbol resolution. For maximum performance, prefer using `callStackReturnAddresses()` and resolve symbols on the backend when collecting backtraces from MetricKit or other crash reporting systems.
 
 ## Requirements
 
