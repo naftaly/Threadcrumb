@@ -1,0 +1,23 @@
+# SwiftFormat configuration
+
+# Format options
+--indent 4
+--indentcase false
+--trimwhitespace always
+--wraparguments before-first
+--wrapparameters before-first
+--wrapcollections before-first
+--maxwidth 120
+--linebreaks lf
+--commas inline
+
+# Enabled rules
+--enable isEmpty
+--enable sortImports
+
+# Disabled rules
+--disable andOperator
+--disable blankLinesBetweenScopes
+
+# Swift version
+--swiftversion 6.0

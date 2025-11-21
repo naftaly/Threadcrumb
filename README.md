@@ -1,7 +1,7 @@
 # Threadcrumb
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
-[![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)](https://swift.org/)
+[![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org/)
 [![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20macOS%20%7C%20tvOS%20%7C%20watchOS%20%7C%20visionOS-lightgrey.svg)]()
 [![Tests](https://github.com/naftaly/Threadcrumb/actions/workflows/test.yml/badge.svg)](https://github.com/naftaly/Threadcrumb/actions/workflows/test.yml)
 
@@ -45,12 +45,24 @@ threadcrumb.log("appstate_active")
 
 ### Extracting Logs
 
-See `Threadcrumb.stringLoggingThread` for an example how to extract your logs from a stacktrace.
-You might want to do this on the backend when collecting backtraces from MetricKit for example.
+Threadcrumb provides several methods to access the call stack information:
+
+```swift
+// Get the call stack return addresses as UInt64 values (most efficient)
+let addresses = threadcrumb.callStackReturnAddresses()
+
+// Get the call stack symbols as strings (computed on-demand from addresses)
+let symbols = threadcrumb.callStackSymbols()
+
+// Extract the encoded breadcrumb string from the stack (for testing)
+let breadcrumb = threadcrumb.stringLoggingThread()
+```
+
+**Performance note:** Only return addresses are stored in memory. Symbols are computed on-demand from addresses when you call `callStackSymbols()`, which uses `dladdr` for symbol resolution. For maximum performance, prefer using `callStackReturnAddresses()` and resolve symbols on the backend when collecting backtraces from MetricKit or other crash reporting systems.
 
 ## Requirements
 
-- Swift 6.2+
+- Swift 6.0+
 - iOS 16.0+ / macOS 13.0+ / tvOS 16.0+ / watchOS 9.0+ / visionOS 1.0+
 
 ## License

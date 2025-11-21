@@ -1,0 +1,207 @@
+name: Benchmarks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Swift
+      uses: swift-actions/setup-swift@v2
+      with:
+        swift-version: "6.0"
+
+    - name: Run benchmarks
+      id: benchmark
+      run: |
+        echo "Running benchmarks..."
+        swift test --filter testPerformance 2>&1 | tee benchmark_output.txt
+
+    - name: Parse and format results
+      run: |
+        python3 << 'EOF'
+        import re
+        from datetime import datetime
+        import subprocess
+
+        # Get system info
+        try:
+            cpu_brand = subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string']).decode().strip()
+            cpu_cores = subprocess.check_output(['sysctl', '-n', 'hw.ncpu']).decode().strip()
+            mem_bytes = int(subprocess.check_output(['sysctl', '-n', 'hw.memsize']).decode().strip())
+            mem_gb = mem_bytes / (1024**3)
+            os_version = subprocess.check_output(['sw_vers', '-productVersion']).decode().strip()
+            machine_model = subprocess.check_output(['sysctl', '-n', 'hw.model']).decode().strip()
+            system_info = f"{cpu_brand} ({cpu_cores} cores), {mem_gb:.0f} GB RAM, macOS {os_version}"
+        except:
+            system_info = "macOS (GitHub Actions)"
+
+        # Read benchmark output
+        with open('benchmark_output.txt', 'r') as f:
+            content = f.read()
+
+        # Find all performance test results with std dev
+        pattern = r"testPerformance(\w+).*?average: ([\d.]+).*?relative standard deviation: ([\d.]+)%"
+        matches = re.findall(pattern, content)
+
+        # Start markdown output
+        output = ["# 🚀 Threadcrumb Performance Benchmarks\n"]
+        output.append(f"**Test Hardware:** {system_info}\n")
+
+        # Logging operations
+        output.append("## Logging Operations\n")
+        output.append("| Operation | Average Time | Std Dev | Per-Op | Status |")
+        output.append("|-----------|--------------|---------|--------|--------|")
+
+        logging_ops = {
+            "ShortString": ("Short string (5 chars)", 100),
+            "MediumString": ("Medium string (20 chars)", 100),
+            "LongString": ("Long string (80 chars)", 100),
+            "MaximumLength": ("Maximum length (256 chars)", 10),
+            "WithSanitization": ("With sanitization", 100),
+            "AllValidCharacters": ("All 38 valid chars", 50),
+        }
+
+        for test_name, avg_time, std_dev in matches:
+            if test_name in logging_ops:
+                avg_time_f = float(avg_time)
+                std_dev_f = float(std_dev)
+                op_name, ops = logging_ops[test_name]
+
+                total_ms = avg_time_f * 1000
+                per_op_us = (avg_time_f * 1_000_000) / ops
+
+                if per_op_us < 1:
+                    per_op = "<1 μs"
+                elif per_op_us < 1000:
+                    per_op = f"{per_op_us:.1f} μs"
+                else:
+                    per_op = f"{per_op_us/1000:.2f} ms"
+
+                # Status based on per-op time for logging (main thread budget)
+                if per_op_us < 200:
+                    status = "✅ Excellent"
+                elif per_op_us < 500:
+                    status = "✅ Good"
+                elif per_op_us < 1000:
+                    status = "⚠️ OK"
+                else:
+                    status = "❌ Review"
+
+                output.append(f"| {op_name} | {total_ms:.1f}ms | {std_dev_f:.1f}% | {per_op} | {status} |")
+
+        # Data access operations
+        output.append("\n## Data Access Operations\n")
+        output.append("| Operation | Average Time | Std Dev | Per-Op | Status |")
+        output.append("|-----------|--------------|---------|--------|--------|")
+
+        access_ops = {
+            "CallStackAccess": ("Call stack symbols", 1000),
+            "ReturnAddressesAccess": ("Return addresses", 1000),
+            "StringExtraction": ("Extract breadcrumb", 100),
+        }
+
+        for test_name, avg_time, std_dev in matches:
+            if test_name in access_ops:
+                avg_time_f = float(avg_time)
+                std_dev_f = float(std_dev)
+                op_name, ops = access_ops[test_name]
+
+                total_ms = avg_time_f * 1000
+                per_op_us = (avg_time_f * 1_000_000) / ops
+
+                if per_op_us < 1:
+                    per_op = "<1 μs"
+                elif per_op_us < 1000:
+                    per_op = f"{per_op_us:.1f} μs"
+                else:
+                    per_op = f"{per_op_us/1000:.2f} ms"
+
+                # Status for read operations (should be very fast)
+                if per_op_us < 10:
+                    status = "✅ Excellent"
+                elif per_op_us < 100:
+                    status = "✅ Good"
+                elif per_op_us < 500:
+                    status = "⚠️ OK"
+                else:
+                    status = "❌ Review"
+
+                output.append(f"| {op_name} | {total_ms:.2f}ms | {std_dev_f:.1f}% | {per_op} | {status} |")
+
+        # Stress tests
+        output.append("\n## Stress Tests\n")
+        output.append("| Test | Average Time | Status |")
+        output.append("|------|--------------|--------|")
+
+        stress_ops = {
+            "RapidSequential": "Rapid sequential (50 logs)",
+        }
+
+        for test_name, avg_time, std_dev in matches:
+            if test_name in stress_ops:
+                avg_time_f = float(avg_time)
+                test_desc = stress_ops[test_name]
+                total_ms = avg_time_f * 1000
+
+                if total_ms < 10:
+                    status = "✅ Excellent"
+                elif total_ms < 50:
+                    status = "✅ Good"
+                elif total_ms < 100:
+                    status = "⚠️ OK"
+                else:
+                    status = "❌ Review"
+
+                output.append(f"| {test_desc} | {total_ms:.1f}ms | {status} |")
+
+        # Performance characteristics
+        output.append("\n## Performance Characteristics")
+        output.append("### Main Thread Budget")
+        output.append("- ✅ **Excellent**: <200μs/op - Perfect for main thread")
+        output.append("- ✅ **Good**: 200-500μs/op - Acceptable for main thread")
+        output.append("- ⚠️ **OK**: 500-1000μs/op - Use with caution")
+        output.append("- ❌ **Review**: >1000μs/op - Consider optimization")
+        output.append("\n*Target: 16.67ms/frame @ 60fps, 8.33ms/frame @ 120fps*")
+        output.append("\n### Implementation Details")
+        output.append("- **Stack depth**: 256 characters max (1MB stack)")
+        output.append("- **Inlining**: `@_transparent` dispatch for zero-overhead function calls")
+        output.append("- **Synchronization**: Lock-free reads, semaphore-coordinated writes")
+        output.append("- **Thread safety**: Dedicated background thread, serialized log operations")
+
+        # Summary
+        total_tests = len(re.findall(r"Test Case.*passed", content))
+        output.append(f"\n---\n**Total tests:** {total_tests} passed | _Generated {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}_")
+
+        # Write to file
+        with open('benchmark_results.md', 'w') as f:
+            f.write('\n'.join(output))
+
+        print('\n'.join(output))
+        EOF
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: thollander/actions-comment-pull-request@v2
+      with:
+        filePath: benchmark_results.md
+        comment_tag: benchmark-results
+
+    - name: Comment commit with results
+      if: github.event_name == 'push'
+      uses: peter-evans/commit-comment@v3
+      with:
+        body-path: benchmark_results.md
